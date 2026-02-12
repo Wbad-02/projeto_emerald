@@ -13,3 +13,6 @@ beautifulsoup4==4.12.3
 
 # Utilidades
 python-dotenv==1.0.0
+
+#Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force
+#.\venv\Scripts\ActivateS
