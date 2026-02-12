@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Relatório de Inteligência Financeira - Emerald</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/print.css') }}" media="print">
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    
+    <style>
+        .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; }
+        .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; }
+        .badge-rec { position: absolute; top: -10px; right: -10px; background: #10b981; color: white; padding: 4px 8px; font-size: 0.75rem; border-radius: 4px; font-weight: bold; }
+        .print-only { display: none; }
+        @media print {
+            .no-print { display: none !important; }
+            .print-only { display: block; }
+            body { background: white; -webkit-print-color-adjust: exact; }
+            .page-break { page-break-before: always; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="upload-section" class="upload-screen" style="min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #f0fdf4;">
+        <div class="upload-card" style="background: white; padding: 3rem; border-radius: 1rem; box-shadow: 0 10px 25px rgba(0,0,0,0.1); text-align: center; max-width: 500px; width: 100%;">
+            <div style="font-size: 4rem; margin-bottom: 1rem;">💎</div>
+            <h1 style="color: #064e3b; margin-bottom: 0.5rem;">Inteligência Emerald</h1>
+            <p style="color: #6b7280; margin-bottom: 2rem;">Carregue Balancetes e DREs (CSV/Excel) para gerar o diagnóstico completo.</p>
+            
+            <form id="upload-form">
+                <div class="drop-zone" style="border: 2px dashed #10b981; padding: 2rem; border-radius: 0.5rem; background: #ecfdf5; margin-bottom: 1.5rem;">
+                    <label for="pdf-input" class="btn-primary" style="background: #059669; color: white; padding: 0.75rem 1.5rem; border-radius: 0.5rem; cursor: pointer; font-weight: 600; display: inline-block;">
+                        📂 Selecionar Arquivos
+                    </label>
+                    <input type="file" id="pdf-input" name="pdf-input" multiple accept=".csv, .xls, .xlsx" style="display: none;">
+                    <div id="file-list" style="margin-top: 1rem; text-align: left; font-size: 0.9rem;"></div>
+                </div>
+                <button type="submit" style="width: 100%; padding: 1rem; background: #064e3b; color: white; border: none; border-radius: 0.5rem; font-weight: bold; cursor: pointer; font-size: 1rem;">
+                    🚀 Gerar Análise Estratégica
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div id="dashboard-content" class="container" style="display: none; max-width: 1200px; margin: 0 auto; padding: 2rem;">
+        
+        <header style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 3px solid #10b981; padding-bottom: 1.5rem; margin-bottom: 2rem;">
+            <div>
+                <h1 id="nome-empresa" style="font-size: 2rem; color: #064e3b; font-weight: 800; margin: 0;">EMPRESA MODELO</h1>
+                <div style="color: #059669; font-size: 0.9rem; margin-top: 0.5rem;">
+                    <span id="cnpj-empresa">CNPJ: --</span> | 
+                    <span>Emissão: <script>document.write(new Date().toLocaleDateString())</script></span>
+                </div>
+            </div>
+            <button onclick="window.print()" class="no-print" style="background: #e5e7eb; color: #374151; border: none; padding: 0.5rem 1rem; border-radius: 0.375rem; cursor: pointer; font-weight: 600;">
+                🖨️ Imprimir PDF
+            </button>
+        </header>
+
+        <section class="section mb-8">
+            <h2 style="font-size: 1.25rem; color: #065f46; border-left: 4px solid #10b981; padding-left: 0.75rem; margin-bottom: 1.5rem;">📊 Resumo Executivo</h2>
+            <div class="grid-3">
+                <div class="card p-4 bg-white shadow rounded border border-gray-100">
+                    <span class="text-sm text-gray-500 font-bold uppercase">Receita Bruta</span>
+                    <h3 id="valor-receita" class="text-2xl font-bold text-emerald-600 mt-1">R$ 0,00</h3>
+                </div>
+                <div class="card p-4 bg-white shadow rounded border border-gray-100">
+                    <span class="text-sm text-gray-500 font-bold uppercase">Resultado Líquido</span>
+                    <h3 id="valor-resultado" class="text-2xl font-bold mt-1">R$ 0,00</h3>
+                </div>
+                <div class="card p-4 bg-white shadow rounded border border-gray-100">
+                    <span class="text-sm text-gray-500 font-bold uppercase">Ativo Total</span>
+                    <h3 id="valor-ativo" class="text-2xl font-bold text-gray-700 mt-1">R$ 0,00</h3>
+                </div>
+            </div>
+        </section>
+
+        <section class="section mb-8">
+            <div class="grid-2">
+                <div>
+                    <h3 style="color: #059669; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                        <span>✅</span> Pontos Positivos
+                    </h3>
+                    <div id="pontos-positivos"></div>
+                </div>
+                <div>
+                    <h3 style="color: #dc2626; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                        <span>⚠️</span> Pontos de Atenção
+                    </h3>
+                    <div id="pontos-atencao"></div>
+                </div>
+            </div>
+        </section>
+
+        <section class="section mb-8">
+            <h2 style="font-size: 1.25rem; color: #065f46; border-left: 4px solid #10b981; padding-left: 0.75rem; margin-bottom: 1.5rem;">📋 Detalhamento das Variações</h2>
+            <div style="background: white; border-radius: 0.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); overflow: hidden;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+                    <thead style="background: #ecfdf5; color: #065f46;">
+                        <tr>
+                            <th style="padding: 1rem; text-align: left;">Conta Contábil</th>
+                            <th style="padding: 1rem; text-align: right;">Período Anterior</th>
+                            <th style="padding: 1rem; text-align: right;">Período Atual</th>
+                            <th style="padding: 1rem; text-align: center;">Variação e Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabela-comparativa-body" style="color: #374151;">
+                        </tbody>
+                </table>
+            </div>
+        </section>
+
+        <div class="page-break"></div>
+
+        <section class="section mb-8" style="margin-top: 2rem;">
+            <h2 style="font-size: 1.25rem; color: #065f46; border-left: 4px solid #10b981; padding-left: 0.75rem; margin-bottom: 1.5rem;">📈 Indicadores de Performance</h2>
+            
+            <div style="margin-bottom: 2rem;">
+                <h4 style="font-size: 0.9rem; color: #6b7280; margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.05em;">Liquidez (Solvência)</h4>
+                <div id="cards-liquidez" class="grid-3"></div>
+            </div>
+
+            <div class="grid-2">
+                <div>
+                    <h4 style="font-size: 0.9rem; color: #6b7280; margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.05em;">Rentabilidade</h4>
+                    <div id="cards-rentabilidade" class="grid-2"></div>
+                </div>
+                <div>
+                    <h4 style="font-size: 0.9rem; color: #6b7280; margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.05em;">Endividamento</h4>
+                    <div id="cards-endividamento"></div>
+                </div>
+            </div>
+        </section>
+
+        <section class="section mb-8">
+            <div class="card p-6 bg-white shadow rounded border border-gray-100" style="height: 350px; position: relative;">
+                <h3 style="position: absolute; top: 1rem; left: 1rem; font-size: 1rem; color: #374151; font-weight: bold;">Eficiência Operacional</h3>
+                <canvas id="chart-principal"></canvas>
+            </div>
+        </section>
+
+        <section class="section mb-8">
+            <h2 style="font-size: 1.25rem; color: #065f46; border-left: 4px solid #10b981; padding-left: 0.75rem; margin-bottom: 1.5rem;">💰 Planejamento Tributário (Estimativa)</h2>
+            <div class="grid-3" style="align-items: flex-end;">
+                
+                <div class="card p-6 bg-white shadow rounded border border-gray-200 text-center relative">
+                    <h3 style="color: #4b5563; font-weight: 600; margin-bottom: 0.5rem;">Simples Nacional</h3>
+                    <div id="tax-simples" style="font-size: 1.5rem; font-weight: 800; color: #111827;">R$ 0,00</div>
+                    <p style="font-size: 0.8rem; color: #9ca3af; margin-top: 0.5rem;">Estimativa Anexo III/IV</p>
+                </div>
+
+                <div class="card p-6 bg-white shadow rounded border border-gray-200 text-center relative">
+                    <h3 style="color: #4b5563; font-weight: 600; margin-bottom: 0.5rem;">Lucro Presumido</h3>
+                    <div id="tax-presumido" style="font-size: 1.5rem; font-weight: 800; color: #111827;">R$ 0,00</div>
+                    <p style="font-size: 0.8rem; color: #9ca3af; margin-top: 0.5rem;">PIS/COFINS + IRPJ/CSLL</p>
+                </div>
+
+                <div class="card p-6 bg-white shadow rounded border border-gray-200 text-center relative">
+                    <h3 style="color: #4b5563; font-weight: 600; margin-bottom: 0.5rem;">Lucro Real</h3>
+                    <div id="tax-real" style="font-size: 1.5rem; font-weight: 800; color: #111827;">R$ 0,00</div>
+                    <p style="font-size: 0.8rem; color: #9ca3af; margin-top: 0.5rem;">Apuração Trimestral</p>
+                </div>
+
+            </div>
+        </section>
+
+        <section class="section mb-8">
+            <h2 style="font-size: 1.25rem; color: #065f46; border-left: 4px solid #10b981; padding-left: 0.75rem; margin-bottom: 1.5rem;">💡 Plano de Ação Recomendado</h2>
+            <div id="recomendacoes-container">
+                </div>
+        </section>
+
+        <footer style="text-align: center; margin-top: 4rem; padding-top: 2rem; border-top: 1px solid #e5e7eb; color: #9ca3af; font-size: 0.8rem;">
+            <p>Relatório gerado automaticamente pelo Sistema Emerald • Confidencial</p>
+            <p>Os valores tributários são estimativas e não substituem a apuração fiscal oficial.</p>
+        </footer>
+
+    </div>
+
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>
