@@ -1,103 +1,90 @@
-import pandas as pd
 import re
-import io
+import unicodedata
 
-class DreCsvExtractor:
-    def __init__(self, file):
-        self.file = file
-        self.metadata = {"empresa": "Não Identificado", "cnpj": "Não Identificado"}
+class DreTxtExtractor:
+    def __init__(self, text_content):
+        self.content = text_content
+        # Lista de âncoras (usaremos normalização para comparar)
+        self.ancoras_grau_1 = [
+            "RECEITA BRUTA", "DEDUCOES", "RECEITA LIQUIDA", "CMV", 
+            "LUCRO BRUTO", "DESPESAS OPERACIONAIS", "DESPESAS COM VENDAS", 
+            "DESPESA COM PESSOAL", "DESPESAS ADMINISTRATIVAS", 
+            "DESPESAS TRIBUTARIAS", "DESPESAS FINANCEIRAS", 
+            "RESULTADO OPERACIONAL", "RECEITAS NAO OPERACIONAIS"
+        ]
+        self.metadata = {"empresa": "", "cnpj": ""}
+
+    def _normalizar(self, texto):
+        """Remove acentos e deixa em maiúsculo para comparação segura"""
+        texto = unicodedata.normalize('NFD', texto)
+        texto = "".join([c for c in texto if unicodedata.category(c) != 'Mn'])
+        return texto.upper().strip()
 
     def execute(self):
-        content_bytes = self.file.read()
-        self.file.seek(0)
+        lines = self.content.splitlines()
+        contas = []
+        indicadores_finais = {ancora: 0.0 for ancora in self.ancoras_grau_1}
         
-        try:
-            content = content_bytes.decode('utf-8')
-        except:
-            content = content_bytes.decode('latin1')
-
-        # 1. Tenta ler como CSV de múltiplas colunas (Padrão 2024)
-        df = pd.read_csv(io.StringIO(content), header=None, sep=',', quotechar='"')
-        
-        if len(df.columns) > 1:
-            return self._process_structured_dre(df)
-        else:
-            # 2. Se tiver só uma coluna, processa como relatório de texto (Padrão 2023)
-            return self._process_text_report_dre(content.splitlines())
-
-    def _process_structured_dre(self, df):
-        """Lógica para o arquivo 2024 (múltiplas colunas)."""
-        self._extract_metadata_df(df)
-        flat_data = []
-        for i, row in df.iterrows():
-            if i < 4: continue
-            
-            # Busca a descrição na coluna 0 ou 2
-            desc_raw = str(row[0]).strip() if pd.notna(row[0]) and str(row[0]).strip() else str(row[2]).strip()
-            # Busca o valor na coluna 11 (conforme inspeção do arquivo 2024)
-            val_raw = row[11] if len(row) > 11 else None
-            
-            if desc_raw and desc_raw.lower() != 'nan' and "Descrição" not in desc_raw:
-                # Calcula nível pela coluna (0 = Nível 0, 2 = Nível 1)
-                nivel = 0 if pd.notna(row[0]) and str(row[0]).strip() else 1
-                flat_data.append({
-                    "descricao": desc_raw,
-                    "nivel": nivel,
-                    "valor": self._to_float(val_raw)
-                })
-        
-        return {"metadata": self.metadata, "contas": self._build_hierarchy(flat_data)}
-
-    def _process_text_report_dre(self, lines):
-        """Lógica para o arquivo 2023 (texto alinhado por espaços)."""
-        self._extract_metadata_lines(lines)
-        flat_data = []
         for line in lines:
-            raw_line = line.replace('"', '')
-            match = re.search(r'^(.*?)\s{2,}([\d.,()\-]+[CcDd]?)$', raw_line)
+            if "Período:" in line or "EXERCÍCIO EM" in line:
+                # Pega os 4 últimos dígitos (o ano)
+                match_ano = re.search(r'(\d{4})', line)
+                if match_ano:
+                    self.metadata["ano"] = match_ano.group(1)
+
+        grupo_pai_atual = None
+        # Normalizamos as âncoras uma vez só para performance
+        ancoras_norm = [self._normalizar(a) for a in self.ancoras_grau_1]
+
+        # Regex robusto para pegar Texto e Valor no final
+        regex_linha = re.compile(r'^(.*?)\s{2,}([\(\-]?\d{1,3}(?:\.\d{3})*,\d{2}\)?)$')
+
+        for line in lines:
+            line = line.strip()
+            if not line or "Descricao" in self._normalizar(line): continue
+
+            match = regex_linha.search(line)
             if match:
-                raw_desc = match.group(1)
-                indent = len(raw_desc) - len(raw_desc.lstrip())
-                desc = raw_desc.strip()
-                if "Descrição" in desc or any(k in raw_line for k in ["Empresa:", "C.N.P.J."]): continue
+                desc_original = match.group(1).strip().upper()
+                desc_norm = self._normalizar(desc_original)
+                valor = self._parse_br_number(match.group(2))
+
+                # Identifica se a linha é uma Âncora de Grau 1
+                is_g1 = False
+                ancora_nome = None
                 
-                flat_data.append({
-                    "descricao": desc,
-                    "nivel": indent // 2,
-                    "valor": self._to_float(match.group(2))
-                })
-        return {"metadata": self.metadata, "contas": self._build_hierarchy(flat_data)}
+                for i, a_norm in enumerate(ancoras_norm):
+                    # Se a âncora está contida na descrição (ex: "DEDUCOES" em "DEDUÇÕES")
+                    if a_norm in desc_norm:
+                        is_g1 = True
+                        ancora_nome = self.ancoras_grau_1[i]
+                        break
 
-    def _extract_metadata_df(self, df):
-        # Busca metadados no DataFrame (2024)
-        for val in df.head(5).values.flatten():
-            s = str(val)
-            if "42.497.558" in s: self.metadata["cnpj"] = "42.497.558/0001-74"
-            if "ITASUL" in s: self.metadata["empresa"] = "ITASUL TRANSPORTE E LOGISTICA LTDA"
+                if is_g1:
+                    grupo_pai_atual = ancora_nome
+                    indicadores_finais[ancora_nome] = valor
+                    contas.append({
+                        "descricao": desc_original,
+                        "valor": valor,
+                        "nivel": 1,
+                        "pai": None
+                    })
+                else:
+                    contas.append({
+                        "descricao": desc_original,
+                        "valor": valor,
+                        "nivel": 2,
+                        "pai": grupo_pai_atual
+                    })
 
-    def _extract_metadata_lines(self, lines):
-        # Busca metadados nas linhas de texto (2023)
-        combined = " ".join(lines[:10])
-        if "42.497.558" in combined: self.metadata["cnpj"] = "42.497.558/0001-74"
-        if "ITASUL" in combined: self.metadata["empresa"] = "ITASUL TRANSPORTE E LOGISTICA LTDA"
+        return {
+            "metadata": self.metadata,
+            "indicadores_grau_1": indicadores_finais,
+            "contas": contas
+        }
 
-    def _to_float(self, val):
-        if pd.isna(val) or val == "": return 0.0
-        s = str(val).strip().lower()
-        is_negative = '(' in s or '-' in s
-        s = re.sub(r'[^\d,]', '', s.replace('.', '')).replace(',', '.')
-        try:
-            num = float(s)
-            return -num if is_negative else num
+    def _parse_br_number(self, val_str):
+        s = val_str.replace('.', '').replace(',', '.')
+        if '(' in s: s = "-" + s.replace('(', '').replace(')', '')
+        try: return float(s)
         except: return 0.0
-
-    def _build_hierarchy(self, flat_data):
-        root, stack = [], []
-        for item in flat_data:
-            node = {"descricao": item['descricao'], "valor": item['valor'], "filhos": []}
-            while stack and item['nivel'] <= stack[-1]['nivel']:
-                stack.pop()
-            if not stack: root.append(node)
-            else: stack[-1]['node']['filhos'].append(node)
-            stack.append({'nivel': item['nivel'], 'node': node})
-        return root

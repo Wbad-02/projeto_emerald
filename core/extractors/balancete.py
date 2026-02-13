@@ -1,75 +1,74 @@
-import pandas as pd
 import re
-import io
 
-class BalanceteCsvExtractor:
-    def __init__(self, file):
-        self.file = file
-        self.metadata = {"empresa": "Não Identificado", "cnpj": "Não Identificado"}
+class BalanceteTxtExtractor:
+    def __init__(self, text_content):
+        self.content = text_content
+        self.grupos_grau_1 = {} 
+        self.metadata = {"empresa": "ITASUL TRANSPORTE E LOGISTICA LTDA", "cnpj": ""}
 
     def execute(self):
-        try:
-            content = self.file.read()
-            self.file.seek(0)
-            df = pd.read_csv(io.BytesIO(content), header=None, sep=',', encoding='utf-8', quotechar='"')
-        except:
-            self.file.seek(0)
-            df = pd.read_csv(self.file, header=None, sep=',', encoding='latin1', quotechar='"')
+        lines = self.content.splitlines()
+        contas = []
 
-        self._extract_metadata(df)
-        flat_data = self._parse_financial_rows(df)
+        # 1. Captura o Ano do Período
+        for line in lines:
+            if "Período:" in line:
+                match_ano = re.search(r'(\d{4})', line)
+                if match_ano: self.metadata["ano"] = match_ano.group(1)
+
+        # 2. Processamento das Contas
+        for line in lines:
+            # Identifica linhas de conta (começam com Código e Classificação)
+            if not re.match(r'^\d', line): continue
+            
+            # --- LÓGICA DE EXTRAÇÃO POR BLOCOS ---
+            
+            # BLOCO A: Descrição (está antes das 4 vírgulas)
+            # Ex: 010000,1,,ATIVO,,,,1,393...
+            partes_principais = line.split(',,,,')
+            if len(partes_principais) < 2: continue
+            
+            cabecalho = partes_principais[0].split(',') # [010000, 1, , ATIVO]
+            classificacao = cabecalho[1].strip()
+            descricao = cabecalho[3].strip() if len(cabecalho) > 3 else ""
+
+            # BLOCO B: Valores (estão após as 4 vírgulas, separados por 2 vírgulas)
+            # O "Saldo Atual" é o último valor da sequência
+            bloco_valores = partes_principais[1].split(',,')
+            # O Saldo Atual costuma ser o 4º valor (índice 3)
+            if len(bloco_valores) >= 4:
+                valor_raw = bloco_valores[3].strip().replace(',', '') # Pega o "3,152,485.89d"
+                valor_final = self._parse_us_number(valor_raw)
+
+                if classificacao and descricao:
+                    nivel = classificacao.count('.') + 1
+                    conta_obj = {
+                        "classificacao": classificacao,
+                        "descricao": descricao.upper(),
+                        "valor": valor_final,
+                        "nivel": nivel
+                    }
+                    contas.append(conta_obj)
+
+                    # Organiza as variáveis de Grau 1 (Ativo, Passivo, etc)
+                    if nivel == 1:
+                        self.grupos_grau_1[classificacao] = {
+                            "nome": descricao.upper(),
+                            "valor": valor_final
+                        }
 
         return {
             "metadata": self.metadata,
-            "contas": self._build_hierarchy(flat_data)
+            "resumo_grau_1": self.grupos_grau_1,
+            "contas": contas
         }
 
-    def _extract_metadata(self, df):
-        if len(df) > 0:
-            self.metadata["empresa"] = str(df.iloc[0, 1]).strip()
-        if len(df) > 1:
-            self.metadata["cnpj"] = str(df.iloc[1, 1]).strip()
-
-    def _parse_financial_rows(self, df):
-        rows = []
-        for i, row in df.iterrows():
-            if i < 7: continue
-            
-            classif = str(row[1]).strip() if pd.notna(row[1]) else ""
-            desc = str(row[3]).strip() if pd.notna(row[3]) else ""
-            
-            if re.match(r'^(\d+\.?)+$', classif) and len(desc) > 2:
-                rows.append({
-                    "classificacao": classif,
-                    "descricao": desc,
-                    "nivel": classif.count('.'),
-                    "valores": {
-                        "saldo_anterior": self._to_float(row[7]),
-                        "saldo_atual": self._to_float(row[13])
-                    }
-                })
-        return rows
-
-    def _to_float(self, val):
-        if pd.isna(val): return 0.0
-        s = str(val).strip().lower()
-        is_negative = '(' in s or '-' in s
-        # Formato Balancete (Americano): 1,234.56
-        s = re.sub(r'[^\d.]', '', s.replace(',', ''))
+    def _parse_us_number(self, s):
+        """Trata o formato do balancete: 3,152,485.89d"""
+        # Já removemos a vírgula de milhar no split anterior
+        is_negative = 'C' in s.upper() or '-' in s or '(' in s
+        # Remove letras e garante que o ponto decimal permaneça
+        clean = re.sub(r'[^\d.]', '', s)
         try:
-            num = float(s)
-            return -num if is_negative else num
+            return -float(clean) if is_negative else float(clean)
         except: return 0.0
-
-    def _build_hierarchy(self, flat_data):
-        root, stack = [], []
-        for row in flat_data:
-            node = {**row, "filhos": []}
-            while stack and row['nivel'] <= stack[-1]['nivel']:
-                stack.pop()
-            if not stack:
-                root.append(node)
-            else:
-                stack[-1]['filhos'].append(node)
-            stack.append(node)
-        return root
