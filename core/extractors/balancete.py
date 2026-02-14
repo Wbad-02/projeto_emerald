@@ -3,72 +3,71 @@ import re
 class BalanceteTxtExtractor:
     def __init__(self, text_content):
         self.content = text_content
-        self.grupos_grau_1 = {} 
-        self.metadata = {"empresa": "ITASUL TRANSPORTE E LOGISTICA LTDA", "cnpj": ""}
+        self.resumo_grau_1 = {} 
+        self.metadata = {"empresa": "Não Identificada", "cnpj": "", "ano": None}
 
     def execute(self):
         lines = self.content.splitlines()
-        contas = []
-
-        # 1. Captura o Ano do Período
         for line in lines:
+            # 1. Metadados Dinâmicos (Empresa e Ano)
+            if "Empresa:" in line:
+                # Pega o texto entre aspas ou após a vírgula
+                match = re.search(r'Empresa:,"?([^",]+)"?', line)
+                if match: self.metadata["empresa"] = match.group(1).strip()
+                continue
+                
             if "Período:" in line:
                 match_ano = re.search(r'(\d{4})', line)
                 if match_ano: self.metadata["ano"] = match_ano.group(1)
+                continue
 
-        # 2. Processamento das Contas
-        for line in lines:
-            # Identifica linhas de conta (começam com Código e Classificação)
-            if not re.match(r'^\d', line): continue
-            
-            # --- LÓGICA DE EXTRAÇÃO POR BLOCOS ---
-            
-            # BLOCO A: Descrição (está antes das 4 vírgulas)
-            # Ex: 010000,1,,ATIVO,,,,1,393...
-            partes_principais = line.split(',,,,')
-            if len(partes_principais) < 2: continue
-            
-            cabecalho = partes_principais[0].split(',') # [010000, 1, , ATIVO]
-            classificacao = cabecalho[1].strip()
-            descricao = cabecalho[3].strip() if len(cabecalho) > 3 else ""
+            # 2. Processamento de Contas
+            # Procura linhas que começam com o padrão de conta (ex: 010000,1)
+            # e captura o último valor da linha (Saldo Atual)
+            match_conta = re.search(r'^\d+,([\d.]+),+([^,]+)', line)
+            if match_conta:
+                classificacao = match_conta.group(1)
+                descricao = match_conta.group(2).strip().replace('"', '').upper()
+                
+                # Pega o último valor numérico antes do fim da linha
+                valores = re.findall(r'([\d,.]+)[dc]?,?$', line.strip())
+                if valores:
+                    valor_raw = valores[-1].rstrip(',')
+                    valor_final = self._parse_br_or_us_number(valor_raw, classificacao)
 
-            # BLOCO B: Valores (estão após as 4 vírgulas, separados por 2 vírgulas)
-            # O "Saldo Atual" é o último valor da sequência
-            bloco_valores = partes_principais[1].split(',,')
-            # O Saldo Atual costuma ser o 4º valor (índice 3)
-            if len(bloco_valores) >= 4:
-                valor_raw = bloco_valores[3].strip().replace(',', '') # Pega o "3,152,485.89d"
-                valor_final = self._parse_us_number(valor_raw)
-
-                if classificacao and descricao:
                     nivel = classificacao.count('.') + 1
-                    conta_obj = {
-                        "classificacao": classificacao,
-                        "descricao": descricao.upper(),
-                        "valor": valor_final,
-                        "nivel": nivel
-                    }
-                    contas.append(conta_obj)
-
-                    # Organiza as variáveis de Grau 1 (Ativo, Passivo, etc)
-                    if nivel == 1:
-                        self.grupos_grau_1[classificacao] = {
-                            "nome": descricao.upper(),
+                    if nivel <= 2:
+                        self.resumo_grau_1[classificacao] = {
+                            "nome": descricao,
                             "valor": valor_final
                         }
 
         return {
             "metadata": self.metadata,
-            "resumo_grau_1": self.grupos_grau_1,
-            "contas": contas
+            "resumo_grau_1": self.resumo_grau_1
         }
 
-    def _parse_us_number(self, s):
-        """Trata o formato do balancete: 3,152,485.89d"""
-        # Já removemos a vírgula de milhar no split anterior
-        is_negative = 'C' in s.upper() or '-' in s or '(' in s
-        # Remove letras e garante que o ponto decimal permaneça
-        clean = re.sub(r'[^\d.]', '', s)
+    def _parse_br_or_us_number(self, s, cod):
+        """Detecta e converte 3,152,485.89 (2023) ou 3.152.485,89 (2024)"""
+        if not s or s in ['0.00', '0,00']: return 0.0
+        
+        # Remove caracteres de débito/crédito para a conversão
+        is_negative = 'c' in s.lower()
+        clean = re.sub(r'[^\d,.]', '', s)
+        
+        # Identifica o separador decimal (o último sinal de pontuação)
+        if ',' in clean and '.' in clean:
+            if clean.rfind(',') > clean.rfind('.'): # Padrão BR (2024)
+                clean = clean.replace('.', '').replace(',', '.')
+            else: # Padrão US (2023)
+                clean = clean.replace(',', '')
+        else:
+            clean = clean.replace(',', '.')
+
         try:
-            return -float(clean) if is_negative else float(clean)
+            val = float(clean)
+            # Ativo (1): Débito é +, Crédito é - | Passivo (2): Crédito é +, Débito é -
+            if cod.startswith('1'): return -val if is_negative else val
+            if cod.startswith('2'): return val if is_negative else -val
+            return val
         except: return 0.0

@@ -33,5 +33,5 @@ def diagnostico_completo(caminho):
             print(f"Linha {i}: {linha}")
 
 # Substitua pelo seu caminho real
-caminho_balancete = r"C:\Users\Wemerson Dias\Downloads\origin\uploads\Balancete Itasul 2025.txt"
+caminho_balancete = r"C:\Users\Wemerson Dias\Downloads\Balancete-Itasul-2024 (1).csv"
 diagnostico_completo(caminho_balancete)

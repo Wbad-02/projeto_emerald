@@ -47,7 +47,6 @@ def realizar_teste_balancete(caminho_arquivo):
 
 # --- CONFIGURAÇÃO DO CAMINHO ---
 # Certifique-se de que este caminho aponta para o seu arquivo de balancete
-caminho = r"C:\Users\Wemerson Dias\Downloads\origin\uploads\Balancete Itasul 2024.pdf"
-
+caminho = r"C:\Users\Wemerson Dias\Downloads\Balancete-Itasul-2024 (1).csv"
 if __name__ == "__main__":
     realizar_teste_balancete(caminho)

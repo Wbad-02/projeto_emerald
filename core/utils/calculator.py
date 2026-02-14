@@ -1,58 +1,35 @@
 class FinancialCalculator:
     @staticmethod
-    def gerar_tabela_comparativa(dados_por_ano):
-        # Ordenamos os anos para garantir que o menor seja o "Anterior"
-        anos_ordenados = sorted(dados_por_ano.keys())
+    def processar_dashboard(dados_por_ano):
+        anos = sorted(dados_por_ano.keys())
+        if len(anos) < 2: return None
+
+        ano_ant, ano_atu = anos[0], anos[1]
+        p_ant = dados_por_ano[ano_ant]["balancete"].get("resumo_grau_1", {})
+        p_atu = dados_por_ano[ano_atu]["balancete"].get("resumo_grau_1", {})
         
-        if len(anos_ordenados) < 2:
-            return [] # Necessário ao menos dois anos para comparar
+        empresa = dados_por_ano[ano_atu]["balancete"]["metadata"].get("empresa", "Empresa Desconhecida")
 
-        ano_ant = anos_ordenados[0]
-        ano_atu = anos_ordenados[1]
-
-        # Mapeamento: (Chave de busca, Nome de exibição na tabela, Origem)
-        contas_para_comparar = [
-            ("1.1", "Ativo Circulante", "balancete"),
-            ("1.2", "Ativo Não Circulante", "balancete"),
-            ("1", "Ativo Total", "balancete"),
-            ("2.1", "Passivo Circulante", "balancete"),
-            ("2.3", "Patrimônio Líquido", "balancete"),
-            ("RECEITA BRUTA", "Receita Bruta", "dre"),
-            ("RECEITA LIQUIDA", "Receita Líquida", "dre"),
-            ("LUCRO BRUTO", "Lucro Bruto", "dre"),
-            ("LUCRO LIQUIDO", "Lucro Líquido", "dre")
-        ]
+        mapeamento = [("1", "Ativo Total"), ("1.1", "Ativo Circulante"), 
+                      ("2.1", "Passivo Circulante"), ("2.3", "Patrimônio Líquido")]
 
         comparativo = []
-
-        for chave, nome, origem in contas_para_comparar:
-            v_ant = FinancialCalculator._buscar_valor(dados_por_ano[ano_ant], chave, origem)
-            v_atu = FinancialCalculator._buscar_valor(dados_por_ano[ano_atu], chave, origem)
+        for cod, label in mapeamento:
+            v_ant = p_ant.get(cod, {}).get("valor", 0.0)
+            v_atu = p_atu.get(cod, {}).get("valor", 0.0)
             
             variacao = v_atu - v_ant
-            # Evita divisão por zero se o ano anterior estiver zerado
             percentual = (variacao / abs(v_ant) * 100) if v_ant != 0 else 0
-
+            
             comparativo.append({
-                "conta": nome,
-                "anterior": v_ant,
-                "atual": v_atu,
-                "variacao": variacao,
-                "status_percentual": round(percentual, 2)
+                "conta": label, "anterior": v_ant, "atual": v_atu,
+                "perc": round(percentual, 2),
+                "status": "▲ Crescimento" if percentual > 0.5 else ("▼ Queda" if percentual < -0.5 else "● Estável")
             })
 
-        return comparativo
+        # Cálculo de Liquidez
+        ac = p_atu.get("1.1", {}).get("valor", 0.0)
+        pc = p_atu.get("2.1", {}).get("valor", 0.0)
+        liq = round(ac / pc, 2) if pc != 0 else 0
 
-    @staticmethod
-    def _buscar_valor(pacote_ano, chave, origem):
-        """Busca o valor no sub-bloco correto (balancete ou dre)"""
-        if not pacote_ano or not pacote_ano.get(origem):
-            return 0.0
-        
-        dados = pacote_ano[origem]
-        if origem == "balancete":
-            # Busca no resumo_grau_1 (ex: '1', '1.1')
-            return dados.get("resumo_grau_1", {}).get(chave, {}).get("valor", 0.0)
-        else:
-            # Busca nos indicadores_grau_1 (ex: 'RECEITA BRUTA')
-            return dados.get("indicadores_grau_1", {}).get(chave, 0.0)
+        return {"empresa": empresa, "tabela": comparativo, "liquidez": liq}
