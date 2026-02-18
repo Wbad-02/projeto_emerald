@@ -1,0 +1,62 @@
+/* Configurações de Página A4 */
+@page {
+    size: a4 portrait;
+    margin: 10mm;
+}
+
+/* Ajustes Gerais para PDF */
+#dashboard-content {
+    display: block !important;
+    width: 100% !important;
+    background: white !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+/* FORÇAR EMPILHAMENTO (Resolve o corte lateral) */
+.grid, .grid-charts {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 20px !important;
+}
+
+/* Garantir que cada gráfico ocupe a largura total e não quebre ao meio */
+.bg-white, canvas {
+    width: 100% !important;
+    max-width: 100% !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+}
+
+/* Ajuste de Tabelas (Ex: Ativo Circulante R$ 1.125.156,60) */
+table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    page-break-inside: auto !important;
+}
+
+tr {
+    page-break-inside: avoid !important;
+    break-after: auto !important;
+}
+
+/* Esconder elementos de interface no PDF */
+.print\:hidden, 
+#upload-section, 
+#area-input-especialista, 
+#btn-exportar-pdf,
+header {
+    display: none !important;
+}
+
+/* Forçar cores de fundo no PDF (Webkit) */
+* {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+}
+
+/* Títulos das Seções */
+h2, h3 {
+    page-break-after: avoid !important;
+    color: #064e3b !important;
+}

@@ -1,15 +1,18 @@
-<div class="bg-white rounded-lg shadow overflow-x-auto border border-gray-200">
-    <table class="w-full text-left border-collapse">
-        <thead>
-            <tr class="bg-gray-100 text-xs uppercase text-gray-600 font-bold">
-                <th class="p-4 border-b">CONTA</th>
-                <th class="p-4 border-b text-right">PERÍODO ANTERIOR</th>
-                <th class="p-4 border-b text-right">PERÍODO ATUAL</th>
-                <th class="p-4 border-b text-right">VARIAÇÃO</th>
-                <th class="p-4 border-b">STATUS</th>
-            </tr>
-        </thead>
-        <tbody id="comparative-table-body">
-            </tbody>
-    </table>
-</div>
+<section class="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 page-break-avoid">
+    <h2 class="text-xl font-black text-slate-800 mb-6 flex items-center gap-2">
+        <span class="w-2 h-8 bg-emerald-500 rounded-full"></span> Análise Comparativa
+    </h2>
+    <div class="overflow-visible">
+        <table class="w-full text-left border-collapse">
+            <thead>
+                <tr class="text-slate-400 text-[10px] uppercase border-b border-slate-100">
+                    <th class="pb-4">Conta</th>
+                    <th class="pb-4 text-right">Anterior</th>
+                    <th class="pb-4 text-right">Atual</th>
+                    <th class="pb-4 text-right">Variação (%)</th>
+                </tr>
+            </thead>
+            <tbody id="comparative-table-body" class="text-sm divide-y divide-slate-50"></tbody>
+        </table>
+    </div>
+</section>

@@ -9,15 +9,13 @@ def index():
 
 @app.route('/processar', methods=['POST'])
 def processar():
-    if 'pdf-input' not in request.files:
-        return jsonify({'error': 'Nenhum arquivo enviado'}), 400
-        
-    files = request.files.getlist('pdf-input')
+    # Deve bater com o nome usado no formData.append()
+    arquivos = request.files.getlist('files') 
+    if not arquivos:
+        return jsonify({"error": "Nenhum arquivo recebido"}), 400
     
-    # O Service resolve toda a complexidade e retorna o dicionário pronto
-    resultado_final = FinancialService.processar_arquivos(files)
-
-    return jsonify(resultado_final)
+    resultado = FinancialService.processar_arquivos(arquivos)
+    return jsonify(resultado)
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

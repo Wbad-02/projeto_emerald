@@ -9,7 +9,7 @@ export async function handleUpload(formElement) {
     }
 
     for (const file of fileInput.files) {
-        formData.append('pdf-input', file);
+        formData.append('files', file);
     }
 
     try {

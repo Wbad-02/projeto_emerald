@@ -1,7 +1,7 @@
+import re
 from core.extractors.dre import DreTxtExtractor
 from core.extractors.balancete import BalanceteTxtExtractor
-
-from core.utils.calculator import FinancialCalculator
+from core.utils.calculator_balancete import FinancialCalculator
 from core.utils.calculator_dre import DreCalculator
 from core.utils.converter import FileConverter
 
@@ -11,16 +11,17 @@ class FinancialService:
         dados_por_ano = {}
 
         for file in files:
-            # 1. Normalização do nome para busca
             filename_original = file.filename.upper()
-            filename_limpo = filename_original.replace(".", "").replace("-", "")
             
+            # Converte para texto e limpa aspas e sujeiras de encoding
             texto_limpo = FileConverter.to_text_stream(file)
             if not texto_limpo: continue
 
-            # 2. Identificação robusta do tipo
-            # Agora aceita 'DRE', 'D.R.E.', 'D-R-E' etc.
-            if 'DRE' in filename_limpo or 'DEMONSTRACAO' in filename_limpo:
+            # --- IDENTIFICAÇÃO ROBUSTA ---
+            nome_limpo = re.sub(r'[^A-Z]', '', filename_original)
+            padrões_dre = ['DRE', 'DEMONSTRACAORESULTADO', 'RESULTADOEXERCICIO']
+            
+            if any(k in nome_limpo for k in padrões_dre) or 'D.R.E' in filename_original:
                 extrator = DreTxtExtractor(texto_limpo)
                 tipo = "dre"
             else:
@@ -28,33 +29,49 @@ class FinancialService:
                 tipo = "balancete"
 
             resultado = extrator.execute()
-            ano = str(resultado['metadata'].get('ano') or 'Desconhecido')
+            
+            # Sanitização do Ano
+            raw_ano = resultado.get('metadata', {}).get('ano')
+            ano = str(raw_ano).strip() if raw_ano else 'Desconhecido'
 
             if ano not in dados_por_ano:
                 dados_por_ano[ano] = {"dre": None, "balancete": None}
             
-            # 3. Armazenamento (O erro anterior sobrescrevia o balancete aqui)
             dados_por_ano[ano][tipo] = resultado
 
-        # 4. Filtro de Integridade
+        # Filtro de Integridade: Garante pares de documentos por ano
         dados_validos = {
             ano: dados for ano, dados in dados_por_ano.items() 
             if ano != 'Desconhecido' and dados["dre"] is not None and dados["balancete"] is not None
         }
         
-        if len(dados_validos) < 2:
-            return {"error": "Dados insuficientes. Certifique-se de que os arquivos de DRE contenham 'DRE' no nome."}
+        if not dados_validos:
+            return {"error": "Não foi possível encontrar pares de DRE e Balancete para o mesmo ano."}
 
-        # Prossegue para os cálculos...
-        relatorio_patrimonial = FinancialCalculator.processar_dashboard(dados_validos)
-        relatorio_dre = DreCalculator.processar_dre(dados_validos)
+        # Processamento dos Relatórios (Calculadoras especializadas)
+        rel_balancete = FinancialCalculator.processar_dashboard(dados_validos)
+        rel_dre = DreCalculator.processar_dre(dados_validos)
+        
+        # --- CONSOLIDAÇÃO DE DADOS PARA O FRONT-END ---
+        # Criamos um dicionário mestre de índices que contém todos os placeholders
+        # Isso resolve o problema de valores zerados no JavaScript
+        indices_consolidados = {}
+        indices_consolidados.update(rel_balancete.get("indices", {}))
+        indices_consolidados.update(rel_balancete.get("placeholders", {}))
+        indices_consolidados.update(rel_dre.get("placeholders", {}))
         
         return {
-            "empresa": relatorio_patrimonial.get("empresa", "Empresa não Identificada"),
-            "indices": relatorio_patrimonial.get("indices", {}),
-            "tabela_patrimonial": relatorio_patrimonial.get("tabela", []),
-            "tabela_dre": relatorio_dre.get("tabela", []),
-            "balancete": relatorio_patrimonial.get("placeholders", {}), # Adicionado
-            "dre": relatorio_dre.get("placeholders", {}),               # Adicionado
-            "anos": dados_por_ano 
-}
+            "empresa": rel_balancete.get("empresa", "Empresa não Identificada"),
+            "anos": sorted(list(dados_validos.keys())),
+            
+            # Fonte unificada para cards e tabelas
+            "indices": indices_consolidados,
+            
+            # Tabelas preparadas para renderização direta
+            "tabela_patrimonial": rel_balancete.get("tabela_patrimonial", []),
+            "tabela_dre": rel_dre.get("tabela", []), 
+            
+            # Mantemos as referências originais para compatibilidade
+            "balancete": rel_balancete, 
+            "dre": rel_dre,
+        }

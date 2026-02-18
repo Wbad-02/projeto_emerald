@@ -1,0 +1,23 @@
+<section class="space-y-8">
+    <h2 class="text-xl font-black text-slate-800 flex items-center gap-2 uppercase tracking-tight">
+        <span class="w-2 h-8 bg-blue-500 rounded-full"></span> Análise Visual
+    </h2>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 grid-charts">
+        <div class="bg-white p-4 rounded-3xl border border-slate-100 h-80 shadow-sm overflow-hidden page-break-inside-avoid">
+            <h4 class="text-xs font-black text-slate-400 uppercase mb-2 text-center">Composição do Ativo</h4>
+            <canvas id="ativoChart" style="max-height: 250px;"></canvas>
+        </div>
+        <div class="bg-white p-4 rounded-3xl border border-slate-100 h-80 shadow-sm overflow-hidden page-break-inside-avoid">
+            <h4 class="text-xs font-black text-slate-400 uppercase mb-2 text-center">Composição do Passivo</h4>
+            <canvas id="passivoChart" style="max-height: 250px;"></canvas>
+        </div>
+        <div class="bg-white p-4 rounded-3xl border border-slate-100 h-80 shadow-sm overflow-hidden page-break-inside-avoid">
+            <h4 class="text-xs font-black text-slate-400 uppercase mb-2">Evolução Patrimonial</h4>
+            <canvas id="evolucaoChart" style="max-height: 250px;"></canvas>
+        </div>
+        <div class="bg-white p-4 rounded-3xl border border-slate-100 h-80 shadow-sm overflow-hidden page-break-inside-avoid">
+            <h4 class="text-xs font-black text-slate-400 uppercase mb-2">DRE</h4>
+            <canvas id="dreChart" style="max-height: 250px;"></canvas>
+        </div>
+    </div>
+</section>
