@@ -1,23 +1,67 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Emerald Intelligence</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-slate-50 text-slate-900">
 
-{% block content %}
-    {% include "components/upload_area.html" %}
+    <header class="p-8 bg-white border-b">
+        <h1 class="text-2xl font-black text-emerald-600">Emerald Intelligence</h1>
+        <form id="upload-form" class="mt-4 flex gap-4">
+            <input type="file" id="pdf-input" name="pdf-input" multiple class="border p-2 rounded">
+            <button type="submit" class="bg-emerald-600 text-white px-6 py-2 rounded font-bold hover:bg-emerald-700">
+                Processar
+            </button>
+        </form>
+    </header>
 
-    <div id="dashboard-content" style="display: none;">
-        
-        {% include "components/report_header.html" %}
-        
-        {% include "components/executive_summary.html" %}
+    <main class="p-8 space-y-8">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div class="bg-white p-6 rounded-xl shadow-sm">
+                <p class="text-xs font-bold text-slate-400 uppercase">Liquidez Corrente</p>
+                <h3 id="card-liq-corrente" class="text-3xl font-black">--</h3>
+            </div>
+            <div class="bg-white p-6 rounded-xl shadow-sm">
+                <p class="text-xs font-bold text-slate-400 uppercase">Endividamento</p>
+                <h3 id="card-endividamento" class="text-3xl font-black">--</h3>
+            </div>
+            <div class="bg-white p-6 rounded-xl shadow-sm">
+                <p class="text-xs font-bold text-slate-400 uppercase">Receita Bruta</p>
+                <h3 id="card-receita-atual" class="text-3xl font-black text-slate-800">--</h3>
+            </div>
+            <div class="bg-white p-6 rounded-xl shadow-sm">
+                <p class="text-xs font-bold text-slate-400 uppercase">Resultado Líquido</p>
+                <h3 id="card-lucro-atual" class="text-3xl font-black">--</h3>
+            </div>
+        </div>
 
-        <section class="mb-8">
-            <h2 class="text-xl font-bold text-emerald-800 border-l-4 border-emerald-500 pl-3 mb-4">Análise Comparativa</h2>
-            {% include "components/comparative_table.html" %}
-        </section>
-        
-        <section class="mb-8">
-            <h2 class="text-xl font-bold text-emerald-800 border-l-4 border-emerald-500 pl-3 mb-4">Detalhamento Geral</h2>
-            <div id="tabela-container"></div> 
-        </section>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div class="bg-white p-6 rounded-xl shadow-sm h-96">
+                <canvas id="performanceChart"></canvas>
+            </div>
+            <div class="bg-white p-6 rounded-xl shadow-sm">
+                <table class="w-full text-left">
+                    <thead>
+                        <tr class="text-slate-400 text-xs uppercase">
+                            <th class="pb-4">Conta</th>
+                            <th class="pb-4 text-right">Anterior</th>
+                            <th class="pb-4 text-right">Atual</th>
+                            <th class="pb-4 text-right">Var %</th>
+                        </tr>
+                    </thead>
+                    <tbody id="comparative-table-body">
+                        </tbody>
+                </table>
+            </div>
+        </div>
 
-    </div>
-{% endblock %}
+        <div id="tabela-container" class="bg-white p-6 rounded-xl shadow-sm overflow-x-auto">
+            </div>
+    </main>
+
+    <script type="module" src="/static/js/main.js"></script>
+</body>
+</html>

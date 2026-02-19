@@ -15,4 +15,5 @@ beautifulsoup4==4.12.3
 python-dotenv==1.0.0
 
 #Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force
-#.\venv\Scripts\ActivateS
+#.\venv\Scripts\Activate
+#python -m pip install pandas flask openpyxl pdfminer.six pypdf

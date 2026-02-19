@@ -1,40 +1,29 @@
-document.addEventListener('DOMContentLoaded', () => {
-    const form = document.getElementById('upload-form');
-    if(!form) return;
+export async function handleUpload(formElement) {
+    const formData = new FormData();
+    // CORREÇÃO: Use o ID ou o Name exato do seu input no HTML
+    const fileInput = document.getElementById('pdf-input') || formElement.querySelector('input[type="file"]');
+    
+    if (!fileInput || !fileInput.files.length) {
+        alert("Por favor, selecione os arquivos.");
+        return null;
+    }
 
-    const input = document.getElementById('file-input');
-    const list = document.getElementById('file-list');
+    for (const file of fileInput.files) {
+        formData.append('pdf-input', file);
+    }
 
-    input.addEventListener('change', (e) => {
-        list.innerHTML = '';
-        Array.from(e.target.files).forEach(f => list.innerHTML += `<div>📄 ${f.name}</div>`);
-    });
+    try {
+        const response = await fetch('/processar', {
+            method: 'POST',
+            body: formData
+        });
 
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        if(input.files.length === 0) return alert('Selecione arquivos');
-        
-        const btn = form.querySelector('button');
-        btn.innerText = 'Processando...';
-        btn.disabled = true;
+        if (response.status === 400) throw new Error("Erro 400: Verifique o nome do campo de upload.");
+        if (!response.ok) throw new Error("Erro no servidor (500). Verifique o terminal.");
 
-        const fd = new FormData();
-        for(let f of input.files) fd.append('pdf-input', f);
-
-        try {
-            const res = await fetch('/processar', {method:'POST', body:fd});
-            const data = await res.json();
-            
-            if(data.error) throw new Error(data.error);
-            
-            // Dispara evento global
-            window.dispatchEvent(new CustomEvent('dados-prontos', {detail: data}));
-            
-        } catch(err) {
-            alert(err.message);
-        } finally {
-            btn.innerText = '🚀 Processar';
-            btn.disabled = false;
-        }
-    });
-});
+        return await response.json();
+    } catch (err) {
+        console.error(err);
+        return null;
+    }
+}

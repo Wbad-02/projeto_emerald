@@ -1,22 +1,23 @@
+import { handleUpload } from './components/upload.js';
+import { updateIndices } from './components/indices.js';
+import { renderCharts } from './components/graficos.js';
+// CORREÇÃO: Nome do arquivo no plural e funções corretas
 import { renderizarAnaliseComparativa, renderizarDetalhamento } from './components/tabelas.js';
 
-document.addEventListener('DOMContentLoaded', () => {
-    // Escuta o evento de conclusão do upload
-    window.addEventListener('dados-prontos', (e) => {
-        const data = e.detail;
+document.getElementById('upload-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const data = await handleUpload(e.target);
+    
+    if (data && !data.error) {
+        updateIndices(data.indices, data.dre);
+        renderCharts(data.dre);
+        renderizarAnaliseComparativa(data.tabela_patrimonial);
         
-        // Exibe o dashboard e esconde o upload
-        document.getElementById('upload-section').style.display = 'none';
-        document.getElementById('dashboard-content').style.display = 'block';
-        
-        // Renderiza a tabela de 5 colunas conforme image_873390.png
-        if (data.comparativo) {
-            renderizarAnaliseComparativa(data.comparativo);
+        const anos = Object.keys(data.anos || {}).sort();
+        if (anos.length > 0) {
+            renderizarDetalhamento(data.anos[anos[anos.length - 1]]);
         }
-
-        // Renderiza o detalhamento do último ano
-        const anos = Object.keys(data.anos).sort();
-        const ultimoAno = anos[anos.length - 1];
-        renderizarDetalhamento(data.anos[ultimoAno]);
-    });
+    } else if (data?.error) {
+        alert(data.error);
+    }
 });

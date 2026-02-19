@@ -4,78 +4,89 @@ import unicodedata
 class DreTxtExtractor:
     def __init__(self, text_content):
         self.content = text_content
-        # Lista de âncoras (usaremos normalização para comparar)
+        # Âncoras normalizadas para garantir o "match" na Etapa 2
         self.ancoras_grau_1 = [
             "RECEITA BRUTA", "DEDUCOES", "RECEITA LIQUIDA", "CMV", 
             "LUCRO BRUTO", "DESPESAS OPERACIONAIS", "DESPESAS COM VENDAS", 
             "DESPESA COM PESSOAL", "DESPESAS ADMINISTRATIVAS", 
             "DESPESAS TRIBUTARIAS", "DESPESAS FINANCEIRAS", 
-            "RESULTADO OPERACIONAL", "RECEITAS NAO OPERACIONAIS"
+            "RESULTADO OPERACIONAL", "PREJUIZO DO EXERCICIO", "LUCRO DO EXERCICIO"
         ]
-        self.metadata = {"empresa": "", "cnpj": ""}
+        self.metadata = {"empresa": "Não Identificada", "ano": None}
 
     def _normalizar(self, texto):
-        """Remove acentos e deixa em maiúsculo para comparação segura"""
+        if not texto: return ""
         texto = unicodedata.normalize('NFD', texto)
         texto = "".join([c for c in texto if unicodedata.category(c) != 'Mn'])
         return texto.upper().strip()
 
+    def _extrair_ano_robusto(self, texto):
+        """Busca o ano 202X em datas ou de forma avulsa no cabeçalho."""
+        # 1. Procura em frases típicas: 'Demonstração de 2023' ou 'Exercício: 2023'
+        match_frase = re.search(r"(?:Resultado|Exercício|Período).*?(\b202[0-9]\b)", texto, re.IGNORECASE)
+        if match_frase: return match_frase.group(1)
+
+        # 2. Procura em datas completas DD/MM/AAAA
+        match_data = re.search(r"\d{2}/\d{2}/(202[0-9])", texto)
+        if match_data: return match_data.group(1)
+
+        # 3. Fallback: Primeiro 202X encontrado no início do texto
+        match_avulso = re.search(r"\b202[0-9]\b", texto[:500])
+        if match_avulso: return match_avulso.group()
+        
+        return None
+
     def execute(self):
+        # 1. Captura Metadados (Ano e Empresa)
+        self.metadata["ano"] = self._extrair_ano_robusto(self.content)
+        
         lines = self.content.splitlines()
         contas = []
-        indicadores_finais = {ancora: 0.0 for ancora in self.ancoras_grau_1}
-        
-        for line in lines:
-            if "Período:" in line or "EXERCÍCIO EM" in line:
-                # Pega os 4 últimos dígitos (o ano)
-                match_ano = re.search(r'(\d{4})', line)
-                if match_ano:
-                    self.metadata["ano"] = match_ano.group(1)
-
-        grupo_pai_atual = None
-        # Normalizamos as âncoras uma vez só para performance
         ancoras_norm = [self._normalizar(a) for a in self.ancoras_grau_1]
-
-        # Regex robusto para pegar Texto e Valor no final
-        regex_linha = re.compile(r'^(.*?)\s{2,}([\(\-]?\d{1,3}(?:\.\d{3})*,\d{2}\)?)$')
+        indicadores_finais = {a_norm: 0.0 for a_norm in ancoras_norm}
+        grupo_pai_atual = None
 
         for line in lines:
-            line = line.strip()
-            if not line or "Descricao" in self._normalizar(line): continue
+            linha_limpa = line.strip()
+            if not linha_limpa: continue
 
-            match = regex_linha.search(line)
-            if match:
-                desc_original = match.group(1).strip().upper()
-                desc_norm = self._normalizar(desc_original)
-                valor = self._parse_br_number(match.group(2))
+            # Identifica Empresa no cabeçalho
+            if "Empresa:" in linha_limpa:
+                match_emp = re.search(r'Empresa:[,:]?\s*([^,;"]+)', linha_limpa, re.IGNORECASE)
+                if match_emp: self.metadata["empresa"] = match_emp.group(1).strip().upper()
 
-                # Identifica se a linha é uma Âncora de Grau 1
-                is_g1 = False
-                ancora_nome = None
-                
-                for i, a_norm in enumerate(ancoras_norm):
-                    # Se a âncora está contida na descrição (ex: "DEDUCOES" em "DEDUÇÕES")
-                    if a_norm in desc_norm:
-                        is_g1 = True
-                        ancora_nome = self.ancoras_grau_1[i]
-                        break
+            # 2. Extração de colunas (Lida com aspas do CSV Itasul)
+            colunas = re.findall(r'"([^"]*)"', linha_limpa)
+            # Fallback se não houver aspas: divide por vírgulas múltiplas
+            if not colunas:
+                colunas = [c.strip() for c in re.split(r',+', linha_limpa) if c.strip()]
 
-                if is_g1:
-                    grupo_pai_atual = ancora_nome
-                    indicadores_finais[ancora_nome] = valor
-                    contas.append({
-                        "descricao": desc_original,
-                        "valor": valor,
-                        "nivel": 1,
-                        "pai": None
-                    })
-                else:
-                    contas.append({
-                        "descricao": desc_original,
-                        "valor": valor,
-                        "nivel": 2,
-                        "pai": grupo_pai_atual
-                    })
+            if len(colunas) < 2: continue
+
+            desc_original = colunas[0].strip()
+            # O valor na DRE costuma ser a última coluna com números
+            valores_na_linha = [c for c in colunas[1:] if re.search(r'\d', str(c))]
+            if not valores_na_linha: continue
+            
+            valor_raw = valores_na_linha[-1]
+            desc_norm = self._normalizar(desc_original)
+            valor_final = self._parse_flexible_number(valor_raw)
+
+            # 3. Mapeamento de Âncoras Grau 1 (Etapa 2 do Checklist)
+            is_g1 = False
+            for a_norm in ancoras_norm:
+                if a_norm in desc_norm: # Busca parcial normalizada
+                    indicadores_finais[a_norm] = valor_final
+                    grupo_pai_atual = a_norm
+                    is_g1 = True
+                    break
+
+            contas.append({
+                "descricao": desc_original,
+                "valor": valor_final,
+                "nivel": 1 if is_g1 else 2,
+                "pai": None if is_g1 else grupo_pai_atual
+            })
 
         return {
             "metadata": self.metadata,
@@ -83,8 +94,21 @@ class DreTxtExtractor:
             "contas": contas
         }
 
-    def _parse_br_number(self, val_str):
-        s = val_str.replace('.', '').replace(',', '.')
-        if '(' in s: s = "-" + s.replace('(', '').replace(')', '')
-        try: return float(s)
+    def _parse_flexible_number(self, s):
+        if not s or str(s).strip() in ['0.00', '0,00', '-', '']: return 0.0
+        s = str(s)
+        # Identifica se é negativo (parênteses ou sinal de menos)
+        is_negativo = '(' in s or '-' in s
+        clean = re.sub(r'[^\d,.]', '', s)
+        
+        # Normalização decimal
+        if ',' in clean and '.' in clean:
+            if clean.rfind(',') > clean.rfind('.'): clean = clean.replace('.', '').replace(',', '.')
+            else: clean = clean.replace(',', '')
+        else:
+            clean = clean.replace(',', '.')
+
+        try:
+            val = float(clean)
+            return -val if is_negativo else val
         except: return 0.0
