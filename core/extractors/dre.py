@@ -8,23 +8,33 @@ class DreTxtExtractor:
         self.content = text_content
         self.indicadores = {
             "RECEITA BRUTA": 0.0, "RECEITA LIQUIDA": 0.0, "LUCRO BRUTO": 0.0,
-            "DESPESAS OPERACIONAIS": 0.0, "RESULTADO OPERACIONAL": 0.0
+            "DESPESAS OPERACIONAIS": 0.0, "RESULTADO OPERACIONAL": 0.0,
+            "LUCRO DO EXERCICIO": 0.0
         }
-        self.metadata = {"ano": None, "empresa": "Não Identificada"}
+        self.metadata = {"ano": None, "empresa": "Não Identificada", "cnpj": "Não Identificado"}
 
     def _normalizar(self, texto):
-        """Remove acentos e deixa em maiúsculo para comparação robusta."""
         if not texto: return ""
         nfkd = unicodedata.normalize('NFKD', texto)
         return "".join([c for c in nfkd if not unicodedata.combining(c)]).upper()
 
     def _limpar_valor(self, val_str):
+        """Trata o padrão Itasul: 5,014,213.27 ou (601,705.46)"""
         if not val_str: return 0.0
-        # Remove milhar e trata (1.000,00) como positivo para o dashboard
-        clean = val_str.replace(',', '')
+        
+        clean = val_str.strip()
+        negativo = "(" in clean or "-" in clean
+        
+        # Remove tudo que não seja número ou ponto decimal
+        # No seu CSV, a vírgula é separador de milhar e o ponto é decimal
+        clean = clean.replace(',', '') 
         clean = re.sub(r'[^\d.]', '', clean)
-        try: return float(clean)
-        except: return 0.0
+        
+        try:
+            valor = float(clean)
+            return -valor if negativo else valor
+        except:
+            return 0.0
 
     def execute(self):
         f = io.StringIO(self.content)
@@ -32,37 +42,44 @@ class DreTxtExtractor:
         
         for partes in reader:
             if not partes: continue
-            # Normaliza a linha inteira para evitar erros de acentuação
-            line_norm = self._normalizar(" ".join(partes))
+            
+            line_str = " ".join(partes)
+            line_norm = self._normalizar(line_str)
             
             # 1. Metadados
-            if "EMPRESA:" in line_norm:
+            if "EMPRESA:" in line_norm and self.metadata["empresa"] == "Não Identificada":
                 for p in partes:
-                    if len(p) > 5 and "EMPRESA" not in p.upper():
+                    if len(p.strip()) > 5 and "EMPRESA" not in p.upper():
                         self.metadata["empresa"] = p.strip().upper()
                         break
 
-            match_ano = re.search(r'(\b202[0-9]\b)', line_norm)
-            if match_ano: self.metadata["ano"] = match_ano.group(1)
+            # CNPJ da ITASUL (Evita pegar o da Upgrade Contabilidade no rodapé)
+            if "C.N.P.J.:" in line_norm and self.metadata["cnpj"] == "Não Identificado":
+                match_cnpj = re.search(r'(\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2})', line_str)
+                if match_cnpj: self.metadata["cnpj"] = match_cnpj.group(1)
 
-            # 2. Busca o valor (última coluna preenchida que seja numérica)
+            if "202" in line_norm and not self.metadata["ano"]:
+                match_ano = re.search(r'(\b202[0-9]\b)', line_norm)
+                if match_ano: self.metadata["ano"] = match_ano.group(1)
+
+            # 2. CAPTURA POR COLUNA FIXA (Padrão Itasul detectado: Coluna 11)
+            # O Saldo Atual está na posição 11 do array 'partes'
             valor = 0.0
-            for p in reversed(partes):
-                if re.search(r'\d', p):
-                    valor = self._limpar_valor(p)
-                    break
+            if len(partes) > 11:
+                valor = self._limpar_valor(partes[11])
 
-            # 3. Mapeamento Flexível
+            # 3. Mapeamento
             if "RECEITA BRUTA" in line_norm: 
                 self.indicadores["RECEITA BRUTA"] = valor
-            elif "RECEITA" in line_norm and "QUIDA" in line_norm: 
+            elif "RECEITA" in line_norm and ("LIQUIDA" in line_norm or "QUIDA" in line_norm): 
                 self.indicadores["RECEITA LIQUIDA"] = valor
             elif "LUCRO BRUTO" in line_norm: 
                 self.indicadores["LUCRO BRUTO"] = valor
-            elif "DESPESAS" in line_norm and ("OPERAC" in line_norm or "ADMIN" in line_norm):
+            elif "DESPESAS OPERACIONAIS" in line_norm:
                 self.indicadores["DESPESAS OPERACIONAIS"] = valor
-            elif "RESULTADO" in line_norm and ("OPERAC" in line_norm or "EXERC" in line_norm):
-                # Captura tanto 'Resultado Operacional' quanto 'Resultado do Exercício'
+            elif "RESULTADO OPERACIONAL" in line_norm:
                 self.indicadores["RESULTADO OPERACIONAL"] = valor
+            elif "LUCRO" in line_norm and ("LIQUIDO DO EXERCICIO" in line_norm or "LIQUIDO DO PERIODO" in line_norm):
+                self.indicadores["LUCRO DO EXERCICIO"] = valor
 
         return {"metadata": self.metadata, "indicadores_grau_1": self.indicadores}

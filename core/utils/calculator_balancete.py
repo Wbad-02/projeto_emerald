@@ -5,10 +5,15 @@ class FinancialCalculator:
         if len(anos) < 2: return None
 
         ano_ant, ano_atu = anos[0], anos[1]
-        p_ant = dados_por_ano[ano_ant]["balancete"]["resumo_grau_1"]
-        p_atu = dados_por_ano[ano_atu]["balancete"]["resumo_grau_1"]
+        
+        # Acesso aos dados brutos extraídos
+        b_ant = dados_por_ano[ano_ant]["balancete"]["resumo_grau_1"]
+        b_atu = dados_por_ano[ano_atu]["balancete"]["resumo_grau_1"]
+        
+        # NOVO: Acesso aos dados da DRE para cálculo de rentabilidade
+        d_atu = dados_por_ano[ano_atu]["dre"]["indicadores_grau_1"]
 
-        # 1. Mapeamento das Chaves Base
+        # 1. Mapeamento das Chaves Patrimoniais
         mapeamento = {
             "ATIVO_CIRCULANTE": "Ativo Circulante",
             "ATIVO_NAO_CIRCULANTE": "Ativo Não Circulante",
@@ -20,10 +25,10 @@ class FinancialCalculator:
         placeholders = {}
         tabela_patrimonial = []
 
-        # 2. Processamento das contas individuais
+        # 2. Processamento das variações patrimoniais
         for js_key, bal_key in mapeamento.items():
-            v_ant = abs(p_ant.get(bal_key, 0.0))
-            v_atu = abs(p_atu.get(bal_key, 0.0))
+            v_ant = abs(b_ant.get(bal_key, 0.0))
+            v_atu = abs(b_atu.get(bal_key, 0.0))
             
             var = v_atu - v_ant
             perc = (var / v_ant * 100) if v_ant != 0 else 0.0
@@ -44,31 +49,28 @@ class FinancialCalculator:
                 "status": status_str
             })
 
-        # --- 3. CÁLCULO DOS TOTAIS (Para o Gráfico de Evolução) ---
-        # ATIVO TOTAL = Circulante + Não Circulante
-        at_ant = placeholders["ATIVO_CIRCULANTE_ANT"] + placeholders["ATIVO_NAO_CIRCULANTE_ANT"]
+        # 3. Totais para Gráficos e Índices
         at_atu = placeholders["ATIVO_CIRCULANTE_ATUAL"] + placeholders["ATIVO_NAO_CIRCULANTE_ATUAL"]
-        
-        # PASSIVO TOTAL = Circulante + Não Circulante + PL
-        pt_ant = placeholders["PASSIVO_CIRCULANTE_ANT"] + placeholders["PASSIVO_NAO_CIRCULANTE_ANT"] + placeholders["PATRIMONIO_LIQUIDO_ANT"]
-        pt_atu = placeholders["PASSIVO_CIRCULANTE_ATUAL"] + placeholders["PASSIVO_NAO_CIRCULANTE_ATUAL"] + placeholders["PATRIMONIO_LIQUIDO_ATUAL"]
+        pt_atu = (placeholders["PASSIVO_CIRCULANTE_ATUAL"] + 
+                  placeholders["PASSIVO_NAO_CIRCULANTE_ATUAL"] + 
+                  placeholders["PATRIMONIO_LIQUIDO_ATUAL"])
 
-        # Salva nos placeholders com a nomenclatura que o JS espera (Gráfico 4)
-        placeholders.update({
-            "ATIVO_TOTAL_ANT": at_ant,
-            "ATIVO_TOTAL_ATUAL": at_atu,
-            "PASSIVO_TOTAL_ANT": pt_ant,
-            "PASSIVO_TOTAL_ATUAL": pt_atu
-        })
+        # 4. Extração de valores para Rentabilidade (Margem e ROA)
+        # Tenta capturar o Lucro do Exercício, senão usa o Operacional como fallback
+        lucro_liq = d_atu.get("LUCRO DO EXERCICIO", 0.0) or d_atu.get("RESULTADO OPERACIONAL", 0.0)
+        receita_liq = d_atu.get("RECEITA LIQUIDA", 0.0)
 
-        # 4. Cálculos de Índices
+        # 5. Cálculos dos Índices Finais
         ac = placeholders["ATIVO_CIRCULANTE_ATUAL"]
-        pc = abs(placeholders["PASSIVO_CIRCULANTE_ATUAL"])
-        pc = pc if pc > 0 else 1.0 # Evita divisão por zero
+        pc = abs(placeholders["PASSIVO_CIRCULANTE_ATUAL"]) or 1.0 # Evita divisão por zero
         
         indices = {
             "liq_corrente": round(ac / pc, 2),
-            "endiv_geral": round((pt_atu - placeholders["PATRIMONIO_LIQUIDO_ATUAL"]) / at_atu * 100, 2) if at_atu > 0 else 0
+            "endiv_geral": round((pt_atu - placeholders["PATRIMONIO_LIQUIDO_ATUAL"]) / at_atu * 100, 2) if at_atu > 0 else 0,
+            # NOVO: Margem Líquida (Eficiência sobre Vendas)
+            "margem_liquida": round((lucro_liq / receita_liq * 100), 2) if receita_liq > 0 else 0,
+            # NOVO: ROA (Eficiência sobre Ativos/Estrutura)
+            "roa": round((lucro_liq / at_atu * 100), 2) if at_atu > 0 else 0
         }
 
         return {
