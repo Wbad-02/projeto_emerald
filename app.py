@@ -1,23 +1,32 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 from core.services.financial_service import FinancialService
 
 app = Flask(__name__)
-
-@app.route('/')
-def index():
-    return render_template('dashboard.html')
+# O CORS é vital: ele autoriza o seu index.html (da porta 5500) a falar com o Flask (porta 5000)
+CORS(app)
 
 @app.route('/processar', methods=['POST'])
 def processar():
-    if 'pdf-input' not in request.files:
-        return jsonify({'error': 'Nenhum arquivo enviado'}), 400
-        
-    files = request.files.getlist('pdf-input')
+    # Verifica se os arquivos foram enviados no FormData
+    if 'files' not in request.files:
+        return jsonify({"error": "Nenhum arquivo enviado para análise."}), 400
     
-    # O Service resolve toda a complexidade e retorna o dicionário pronto
-    resultado_final = FinancialService.processar_arquivos(files)
-
-    return jsonify(resultado_final)
+    files = request.files.getlist('files')
+    
+    try:
+        # O Maestro processa, calcula margens, ROA e organiza os anos
+        resultado = FinancialService.processar_arquivos(files)
+        
+        if "error" in resultado:
+            return jsonify(resultado), 400
+            
+        return jsonify(resultado)
+        
+    except Exception as e:
+        print(f"Erro interno: {e}")
+        return jsonify({"error": "Falha no processamento interno dos documentos."}), 500
 
 if __name__ == '__main__':
+    # Roda na porta 5000 por padrão
     app.run(debug=True, port=5000)
