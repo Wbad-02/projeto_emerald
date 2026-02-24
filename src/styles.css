@@ -1,0 +1,47 @@
+/* 1. Configurações de Impressão (PDF) */
+@media print {
+  .no-print { display: none !important; }
+  body { background: white !important; }
+  .print\:p-0 { padding: 0 !important; }
+  .print\:bg-white { background: white !important; }
+  
+  /* Força a quebra de página antes das recomendações se necessário */
+  section { page-break-inside: avoid; }
+  .mb-20 { margin-bottom: 2rem !important; }
+}
+
+/* 2. Cores de Urgência para Recomendações (Etapa 8) */
+.border-rose-500 { border-left-color: #f43f5e !important; background-color: #fff1f2; } /* CRÍTICA */
+.border-amber-500 { border-left-color: #f59e0b !important; background-color: #fffbeb; } /* ALTA */
+.border-blue-500 { border-left-color: #3b82f6 !important; background-color: #eff6ff; }  /* ESTRATÉGICA */
+.border-slate-400 { border-left-color: #94a3b8 !important; background-color: #f8fafc; } /* PERSONALIZADA */
+
+/* 3. Estilização dos Badges de Urgência */
+.urgencia-badge {
+  font-size: 8px;
+  font-weight: 900;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* 4. Ajustes nos Gráficos Chart.js */
+canvas {
+  max-width: 100%;
+  transition: opacity 0.3s ease;
+}
+
+/* 5. Efeito de Hover nos Cards de KPI */
+.kpi-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+/* 6. Typography Focus */
+h1, h2, h3 {
+  letter-spacing: -0.025em;
+}

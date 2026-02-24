@@ -1,0 +1,122 @@
+<div class="min-h-screen bg-slate-50 p-8 print:bg-white print:p-0">
+  <header class="mb-10 flex justify-between items-end border-b-4 border-emerald-700 pb-6">
+    <div>
+      <h1 class="text-4xl font-black text-slate-900 uppercase italic">Emerald Dashboard</h1>
+      <p class="text-emerald-600 font-bold uppercase text-[10px]">Intelligence & Strategy</p>
+    </div>
+    @if (financialService.dashboardData(); as data) {
+      <div class="text-right">
+        <p class="text-xl font-black text-slate-800 uppercase">{{ data.empresa }}</p>
+        <p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+          Análise: {{ getAnosProcessados(data.anos) }}
+        </p>
+      </div>
+    }
+  </header>
+
+  <section class="no-print mb-10 bg-white p-8 rounded-2xl border-2 border-dashed border-emerald-200 text-center">
+    <input type="file" multiple (change)="onFileSelected($event)" id="fileInput" class="hidden" />
+    <label for="fileInput" class="cursor-pointer text-emerald-700 font-bold flex flex-col items-center gap-2">
+      <span class="text-4xl">📊</span>
+      <span class="uppercase tracking-tight">Carregar Documentos da ITASUL</span>
+    </label>
+  </section>
+
+  @if (financialService.dashboardData(); as data) {
+    
+    <section class="mb-12">
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+        <app-financial-table [data]="financialService.unifiedTable()"></app-financial-table>
+      </div>
+    </section>
+
+    <section class="grid grid-cols-1 md:grid-cols-5 gap-6 mb-12">
+      @for (key of ['liq_corrente', 'endiv_geral', 'margem_liquida', 'roa', 'roe']; track key) {
+        <div [class]="'p-6 rounded-3xl border transition-all ' + getIndicatorClass(key, data.indices[key])">
+          <p class="text-[10px] font-black uppercase opacity-70">{{ formatKey(key) }}</p>
+          <h3 class="text-4xl font-black my-2">{{ data.indices[key] }}{{ key.includes('liq') ? '' : '%' }}</h3>
+        </div>
+      }
+    </section>
+
+    <section class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
+      <div class="bg-white p-6 rounded-3xl border h-[350px]"><canvas #chartAtivo></canvas></div>
+      <div class="bg-white p-6 rounded-3xl border h-[350px]"><canvas #chartPassivo></canvas></div>
+      <div class="bg-white p-6 rounded-3xl border lg:col-span-2 h-[400px]"><canvas #chartEvolucao></canvas></div>
+      <div class="bg-white p-6 rounded-3xl border lg:col-span-2 h-[400px]"><canvas #chartDre></canvas></div>
+    </section>
+
+    <section class="mb-12">
+      <h2 class="text-xs font-black text-emerald-800 uppercase tracking-[0.3em] mb-4">Intelligence Insight: Comparativo de Regimes</h2>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        @for (regime of data.comparativo_tributario; track regime.nome) {
+          <div [class]="regime.economica ? 'bg-slate-900 border-b-8 border-emerald-500 p-6 rounded-2xl' : 'bg-white border p-6 rounded-2xl'">
+            <span [class]="regime.economica ? 'text-emerald-400' : 'text-slate-400'" class="text-[10px] font-black uppercase">
+              {{ regime.nome }} @if(regime.economica){ - MELHOR OPÇÃO }
+            </span>
+            <p [class]="regime.economica ? 'text-white' : 'text-slate-900'" class="text-2xl font-black">
+              {{ regime.valor | currency:'BRL' }}
+            </p>
+          </div>
+        }
+      </div>
+    </section>
+
+    <section class="mb-12">
+      <div class="flex items-center gap-3 mb-8">
+        <div class="h-8 w-2 bg-slate-800 rounded-full"></div>
+        <h2 class="text-2xl font-black text-slate-800 uppercase">Recomendações e Plano de Ação</h2>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
+        <div class="space-y-4">
+          @for (item of todasRecomendacoes(); track item.texto) {
+            @if (item.urgencia !== 'PERSONALIZADA') {
+              <div [class]="item.urgencia === 'CRÍTICA' ? 'bg-rose-50 border-rose-500' : 'bg-emerald-50 border-emerald-500'" 
+                   class="p-4 border-l-4 rounded-r-xl">
+                <p class="font-black text-[10px] uppercase mb-1">{{ item.titulo }}</p>
+                <p class="text-sm leading-relaxed">{{ item.texto }}</p>
+              </div>
+            }
+          }
+        </div>
+      </div>
+
+      <div class="no-print bg-white p-8 rounded-3xl border border-slate-200 shadow-lg mb-10">
+        <textarea 
+          [value]="novaNotaTexto()" 
+          (input)="atualizarTexto($event)"
+          placeholder="Digite sua análise estratégica para a ITASUL..." 
+          class="w-full h-32 p-4 bg-slate-50 border rounded-2xl text-sm outline-none focus:ring-2 focus:ring-emerald-500 shadow-inner"
+        ></textarea>
+        <div class="flex justify-end mt-4">
+          <button (click)="adicionarRecomendacao()" class="bg-emerald-600 text-white px-10 py-3 rounded-xl font-black text-xs uppercase shadow-md">
+            Salvar no Relatório
+          </button>
+        </div>
+      </div>
+
+      <div class="mt-8 space-y-4">
+        @for (item of todasRecomendacoes(); track $index) {
+          @if (item.urgencia === 'PERSONALIZADA') {
+            <div class="p-6 bg-slate-50 border-l-4 border-slate-400 rounded-r-2xl italic shadow-sm">
+              <span class="text-[9px] font-black text-slate-400 uppercase not-italic block mb-2 tracking-widest">Nota do Especialista</span>
+              "{{ item.texto }}"
+            </div>
+          }
+        }
+      </div>
+    </section>
+
+    <div class="flex justify-center no-print pb-20">
+      <button (click)="print()" class="bg-emerald-600 text-white px-12 py-4 rounded-full font-black uppercase text-xs shadow-xl">
+        🖨️ Exportar Relatório PDF
+      </button>
+    </div>
+
+  } @else {
+    <div class="p-20 text-center text-slate-400 uppercase font-black tracking-widest">
+      Aguardando processamento de arquivos para análise...
+    </div>
+  }
+</div>

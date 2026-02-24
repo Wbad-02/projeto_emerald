@@ -1,0 +1,14 @@
+/* Classes de Alerta (Vermelho) - Aplicar para Liquidez < 1.0 e Endividamento > 70% */
+.text-rose-600 { color: #e11d48 !important; }
+.bg-rose-50 { background-color: #fff1f2 !important; }
+.border-rose-100 { border-color: #ffe4e6 !important; }
+
+/* Classes de Atenção (Amarelo) - Aplicar para Margens entre 0% e 10% */
+.text-amber-600 { color: #d97706 !important; }
+.bg-amber-50 { background-color: #fffbeb !important; }
+.border-amber-100 { border-color: #fef3c7 !important; }
+
+/* Classes de Sucesso (Verde) - Aplicar para Rentabilidade > 10% */
+.text-emerald-600 { color: #059669 !important; }
+.bg-emerald-50 { background-color: #ecfdf5 !important; }
+.border-emerald-100 { border-color: #d1fae5 !important; }

@@ -15,20 +15,20 @@ class DreCalculator:
             ind = dados_dre["indicadores_grau_1"]
             contas = dados_dre.get("contas", [])
             
-            # Mapeamento base
+            # --- CORREÇÃO DE MAPEAMENTO PARA ITASUL (Sinônimos) ---
+            # Busca nomes completos e versões curtas encontradas no relatório 
             rb = ind.get("RECEITA BRUTA", 0.0)
-            rl = ind.get("RECEITA LIQUIDA", 0.0)
+            rl = ind.get("RECEITA LIQUIDA", 0.0) or ind.get("RECEITA LIQ", 0.0)
             lb = ind.get("LUCRO BRUTO", 0.0)
-            do = ind.get("DESPESAS OPERACIONAIS", 0.0)
+            do = ind.get("DESPESAS OPERACIONAIS", 0.0) or ind.get("DESP OP", 0.0)
             
-            # --- ADIÇÃO: CÁLCULO DO RESULTADO OPERACIONAL ---
-            # Prioriza o valor extraído, senão calcula: Lucro Bruto - Despesas Operacionais
-            ro = ind.get("RESULTADO OPERACIONAL", 0.0)
-            if ro == 0:
-                ro = lb - do  # Cálculo lógico se a linha estiver ausente ou zerada
+            # Resultado Operacional (EBIT)
+            ro = ind.get("RESULTADO OPERACIONAL", 0.0) or ind.get("RESULTADO OPER", 0.0)
+            if ro == 0 and lb != 0:
+                ro = lb - do  # Cálculo lógico de segurança
             
-            # Lógica para o Lucro Líquido (Final)
-            ll = ind.get("LUCRO DO EXERCICIO", 0.0) or ind.get("PREJUIZO DO EXERCICIO", 0.0)
+            # Lógica para o Lucro Líquido (Confirmado R$ 218.904,13 no PDF) 
+            ll = ind.get("LUCRO DO EXERCICIO", 0.0) or ind.get("LUCRO LIQ", 0.0) or ind.get("PREJUIZO DO EXERCICIO", 0.0)
             if ll == 0:
                 ll = ro # Fallback para o operacional se não houver a linha final
 
@@ -36,30 +36,31 @@ class DreCalculator:
             depreciacao = sum(
                 abs(c.get('valor', 0.0)) 
                 for c in contas 
-                if any(termo in c.get('descricao', '').upper() for termo in ["DEPRECIACAO", "AMORTIZACAO"])
+                if any(termo in str(c.get('descricao', '')).upper() for termo in ["DEPRECIACAO", "AMORTIZACAO"])
             )
             
+            # Retorna valores absolutos para evitar que sinais de crédito (CSV) quebrem os gráficos
             return {
-                "RB": rb, 
-                "RL": rl, 
-                "LB": lb, 
-                "DO": do, 
-                "RO": ro, # <-- Novo campo
+                "RB": abs(rb), 
+                "RL": abs(rl), 
+                "LB": abs(lb), 
+                "DO": abs(do), 
+                "RO": ro,
                 "LL": ll,
-                "EBITDA": ro + depreciacao # EBITDA usa RO como base, não LL
+                "EBITDA": ro + depreciacao
             }
 
         # 2. Extração das Métricas por Ano
         m_ant = extrair_metricas(dados_por_ano[ano_ant].get("dre"))
         m_atu = extrair_metricas(dados_por_ano[ano_atu].get("dre"))
 
-        # --- ADIÇÃO: MAPEAMENTO PARA O DASHBOARD ---
+        # Mapeamento para os placeholders que alimentam o FinancialService e o Chart.js
         map_placeholders = {
             "RECEITA_BRUTA": "RB", 
             "RECEITA_LIQ": "RL", 
             "LUCRO_BRUTO": "LB", 
             "DESP_OP": "DO", 
-            "RESULTADO_OPER": "RO", # <-- Adicionado para gerar os cards/tabela
+            "RESULTADO_OPER": "RO", 
             "EBITDA": "EBITDA", 
             "LUCRO_LIQ": "LL"
         }
@@ -71,7 +72,7 @@ class DreCalculator:
             v_ant = m_ant[m_key]
             v_atu = m_atu[m_key]
             
-            # 3. CÁLCULO DE VARIAÇÃO
+            # 3. Cálculo de Variação
             variacao = v_atu - v_ant
             percentual = (variacao / abs(v_ant) * 100) if v_ant != 0 else 0.0
             
