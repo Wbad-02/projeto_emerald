@@ -6,6 +6,12 @@ export interface TableRow {
   status: string;
 }
 
+export interface ComparativeYearRow {
+  conta: string;
+  tipo: 'Patrimonial' | 'DRE';
+  valores: Record<string, number | null>;
+}
+
 export interface Recommendation {
   texto: string;
   valor: number;
@@ -37,6 +43,6 @@ export interface FinancialResponse {
   tabela_dre: TableRow[];
   comparativo_tributario: TaxRegime[];
   recomendacao?: { texto: string; valor: number };
-  // Adicionado para suportar a Análise Visual (BI) 
-  graficos: FinancialCharts; 
+  // Adicionado para suportar a Análise Visual (BI)
+  graficos: FinancialCharts;
 }

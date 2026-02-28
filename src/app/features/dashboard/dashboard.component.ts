@@ -71,7 +71,7 @@ export class DashboardComponent {
   }
 
   getAnosProcessados(anosObj: any): string {
-    return anosObj ? Object.keys(anosObj).sort().join(' VS ') : '...';
+    return anosObj ? Object.keys(anosObj).sort().join(' | ') : '...';
   }
 
   // GESTÃO DE RECOMENDAÇÕES (IA + SINAL MANUAL)
@@ -160,14 +160,31 @@ export class DashboardComponent {
       options: { ...commonOptions, cutout: '60%', plugins: { legend: { position: 'bottom' } } }
     }));
 
+    const anos = Object.keys(data.anos || {}).sort();
+    const anoAtual = anos.length ? anos[anos.length - 1] : 'Atual';
+    const anoAnterior = anos.length > 1 ? anos[anos.length - 2] : null;
+
+    const datasetsEvolucao: any[] = [];
+    if (anoAnterior) {
+      datasetsEvolucao.push({
+        label: anoAnterior,
+        data: data.graficos.evolucao_patrimonial.anterior,
+        borderColor: '#94a3b8',
+        tension: 0.4
+      });
+    }
+    datasetsEvolucao.push({
+      label: anoAtual,
+      data: data.graficos.evolucao_patrimonial.atual,
+      borderColor: '#10b981',
+      tension: 0.4
+    });
+
     this.charts.push(new Chart(this.chartEvolucao.nativeElement, {
       type: 'line',
       data: {
         labels: data.graficos.evolucao_patrimonial.categorias,
-        datasets: [
-          { label: 'Anterior', data: data.graficos.evolucao_patrimonial.anterior, borderColor: '#94a3b8', tension: 0.4 },
-          { label: 'Atual', data: data.graficos.evolucao_patrimonial.atual, borderColor: '#10b981', tension: 0.4 }
-        ]
+        datasets: datasetsEvolucao
       },
       options: commonOptions
     }));
