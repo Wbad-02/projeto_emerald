@@ -26,7 +26,7 @@
     
     <section class="mb-12">
       <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-        <app-financial-table [data]="financialService.unifiedTable()"></app-financial-table>
+        <app-financial-table [data]="financialService.comparativeYearTable()" [anos]="financialService.anosOrdenados()"></app-financial-table>
       </div>
     </section>
 
