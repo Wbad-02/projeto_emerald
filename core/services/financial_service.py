@@ -1,31 +1,64 @@
-from core.extractors.dre import DreTxtExtractor
-from core.extractors.balancete import BalanceteTxtExtractor
+from core.extractors.balancetes.balancete_csv import BalanceteCsvExtractor
+from core.extractors.balancetes.balancete_pdf import BalancetePdfExtractor
+from core.extractors.balancetes.balancete_xls import BalanceteXlsExtractor
+from core.extractors.balancetes.balancete_xlsx import BalanceteXlsxExtractor
+from core.extractors.dre.dre_csv import DreCsvExtractor
+from core.extractors.dre.dre_pdf import DrePdfExtractor
+from core.extractors.dre.dre_xls import DreXlsExtractor
+from core.extractors.dre.dre_xlsx import DreXlsxExtractor
 from core.utils.calculator_balancete import FinancialCalculator
 from core.utils.calculator_dre import DreCalculator
-from core.utils.converter import FileConverter
 from core.utils.financial_metrics import FinancialMetricsCalculator
 
 class FinancialService:
+    EXTRACTORS = {
+        "dre": {
+            ".csv": DreCsvExtractor,
+            ".xls": DreXlsExtractor,
+            ".xlsx": DreXlsxExtractor,
+            ".pdf": DrePdfExtractor,
+        },
+        "balancete": {
+            ".csv": BalanceteCsvExtractor,
+            ".xls": BalanceteXlsExtractor,
+            ".xlsx": BalanceteXlsxExtractor,
+            ".pdf": BalancetePdfExtractor,
+        },
+    }
+
+    @staticmethod
+    def _identificar_tipo_documento(filename):
+        import re
+
+        nome = re.sub(r"[^A-Z0-9]", "", filename.upper())
+        if "DRE" in nome or "DEMONSTRACAO" in nome:
+            return "dre"
+        return "balancete"
+
+    @staticmethod
+    def _selecionar_extrator(file):
+        nome = file.filename or ""
+        ext = "." + nome.lower().split(".")[-1] if "." in nome else ""
+        tipo = FinancialService._identificar_tipo_documento(nome)
+        extractor_cls = FinancialService.EXTRACTORS.get(tipo, {}).get(ext)
+        return tipo, extractor_cls
+
     @staticmethod
     def processar_arquivos(files):
         dados_por_ano = {}
 
         for file in files:
-            filename_limpo = file.filename.upper().replace(".", "").replace("-", "")
-            texto_limpo = FileConverter.to_text_stream(file)
-            if not texto_limpo: continue
+            tipo, extractor_cls = FinancialService._selecionar_extrator(file)
+            if not extractor_cls:
+                continue
 
-            if 'DRE' in filename_limpo or 'DEMONSTRACAO' in filename_limpo:
-                extrator = DreTxtExtractor(texto_limpo)
-                tipo = "dre"
-            else:
-                extrator = BalanceteTxtExtractor(texto_limpo)
-                tipo = "balancete"
+            extrator = extractor_cls(file)
 
             resultado = extrator.execute()
-            ano = str(resultado['metadata'].get('ano') or 'Desconhecido')
+            ano = str(resultado['metadata'].get('ano_documento') or resultado['metadata'].get('ano') or 'Desconhecido')
             if ano not in dados_por_ano:
                 dados_por_ano[ano] = {"dre": None, "balancete": None}
+            resultado["ano_referencia"] = ano
             dados_por_ano[ano][tipo] = resultado
 
         # Filtro de anos válidos (Necessita DRE + Balancete)
