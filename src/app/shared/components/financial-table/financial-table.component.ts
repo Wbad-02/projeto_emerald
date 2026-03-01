@@ -1,6 +1,6 @@
 import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { TableRow } from '../../../core/model/financial.model';
+import { ComparativeYearRow } from '../../../core/model/financial.model';
 
 @Component({
   selector: 'app-financial-table',
@@ -12,23 +12,29 @@ import { TableRow } from '../../../core/model/financial.model';
         <thead class="bg-emerald-900 text-white uppercase text-[10px] font-bold">
           <tr>
             <th class="px-6 py-4">Conta</th>
-            <th class="px-6 py-4 text-right">Anterior</th>
-            <th class="px-6 py-4 text-right">Atual</th>
-            <th class="px-6 py-4 text-center">Status</th>
+            @for (ano of anos; track ano) {
+              <th class="px-6 py-4 text-right">{{ ano }}</th>
+            }
           </tr>
         </thead>
         <tbody class="divide-y divide-emerald-50">
-          @for (row of data; track row.conta) {
+          @for (row of data; track row.tipo + '::' + row.conta) {
             <tr class="hover:bg-emerald-50/50 transition-colors">
-              <td class="px-6 py-4 font-medium text-slate-700">{{ row.conta }}</td>
-              <td class="px-6 py-4 text-right text-slate-500">{{ row.anterior | currency:'BRL' }}</td>
-              <td class="px-6 py-4 text-right font-bold text-slate-900">{{ row.atual | currency:'BRL' }}</td>
-              <td class="px-6 py-4 text-center">
-                <span class="px-2 py-1 rounded text-[10px] font-bold uppercase"
-                  [ngClass]="row.status.includes('Crescimento') ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'">
-                  {{ row.status }} ({{ row.perc }}%)
-                </span>
+              <td class="px-6 py-4 font-medium text-slate-700">
+                <div class="flex items-center gap-2">
+                  <span class="text-[9px] px-2 py-1 rounded bg-slate-100 text-slate-500 font-black uppercase">{{ row.tipo }}</span>
+                  <span>{{ row.conta }}</span>
+                </div>
               </td>
+              @for (ano of anos; track ano) {
+                <td class="px-6 py-4 text-right font-bold text-slate-900">
+                  @if (row.valores[ano] !== null) {
+                    {{ row.valores[ano] | currency:'BRL' }}
+                  } @else {
+                    <span class="text-slate-400 font-medium">—</span>
+                  }
+                </td>
+              }
             </tr>
           }
         </tbody>
@@ -37,5 +43,6 @@ import { TableRow } from '../../../core/model/financial.model';
   `
 })
 export class FinancialTableComponent {
-  @Input({ required: true }) data: TableRow[] = [];
+  @Input({ required: true }) data: ComparativeYearRow[] = [];
+  @Input({ required: true }) anos: string[] = [];
 }
